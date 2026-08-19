@@ -436,7 +436,7 @@
     </div>
 
     <div class="hint">
-      Say <code>start</code>, <code>go</code>, <code>stop</code>, or <code>reset</code> — or use the buttons above.
+      Say <code>start</code>, <code>take</code>, <code>stop</code>, or <code>reset</code> — or use the buttons above.
     </div>
   </div>
 
@@ -665,7 +665,7 @@
   function commandFromTranscript(text){
     text = text.toLowerCase();
     if (/\breset\b/.test(text)) return 'reset';
-    if (/\blap\b|\bgo\b/.test(text)) return 'lap';
+    if (/\blap\b|\btake\b/.test(text)) return 'lap';
     if (/\bstop\b|\bpause\b/.test(text)) return 'stop';
     if (/\bstart\b|\bbegin\b/.test(text)) return 'start';
     return null;
