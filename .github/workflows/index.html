@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronovox — Voice Stopwatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0B0E0C;
+    --panel: #14180F;
+    --panel-2: #1A2016;
+    --amber: #FFB000;
+    --amber-dim: #8A5F00;
+    --teal: #2DD4BF;
+    --red: #FF5C5C;
+    --ink: #E9E6DA;
+    --ink-dim: #7C8172;
+    --ring: rgba(255,176,0,0.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #171c12 0%, var(--bg) 55%);
+    color:var(--ink);
+    font-family:'Space Grotesk',sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px 16px;
+  }
+
+  .unit{
+    width:100%;
+    max-width:480px;
+    background:linear-gradient(180deg,var(--panel) 0%, #10130D 100%);
+    border:1px solid #262C1D;
+    border-radius:22px;
+    padding:28px 26px 24px;
+    box-shadow:
+      0 0 0 1px rgba(255,176,0,0.03),
+      0 30px 60px -20px rgba(0,0,0,0.7),
+      inset 0 1px 0 rgba(255,255,255,0.03);
+    position:relative;
+    overflow:hidden;
+  }
+  .unit::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    pointer-events:none;
+  }
+
+  .brand-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:22px;
+  }
+  .brand{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    letter-spacing:0.28em;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+  }
+  .brand b{color:var(--amber); font-weight:700;}
+
+  .mic-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--panel-2);
+    border:1px solid #2A3120;
+    border-radius:999px;
+    padding:6px 14px 6px 10px;
+    cursor:pointer;
+    font-size:11.5px;
+    letter-spacing:0.08em;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+    transition:border-color .2s;
+    font-family:'Space Grotesk',sans-serif;
+    user-select:none;
+  }
+  .mic-toggle:hover{border-color:#3a4429;}
+  .mic-dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--ink-dim);
+    flex-shrink:0;
+  }
+  .mic-toggle.listening .mic-dot{
+    background:var(--red);
+    box-shadow:0 0 0 0 rgba(255,92,92,0.6);
+    animation:pulse-dot 1.4s infinite;
+  }
+  .mic-toggle.listening{color:var(--ink); border-color:rgba(255,92,92,0.35);}
+  @keyframes pulse-dot{
+    0%{box-shadow:0 0 0 0 rgba(255,92,92,0.55);}
+    70%{box-shadow:0 0 0 8px rgba(255,92,92,0);}
+    100%{box-shadow:0 0 0 0 rgba(255,92,92,0);}
+  }
+
+  /* Bezel / dial */
+  .dial-wrap{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1;
+    max-width:320px;
+    margin:4px auto 20px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  svg.bezel{position:absolute; inset:0; width:100%; height:100%;}
+  .tick{stroke:#2A3120; stroke-width:1.5;}
+  .tick.major{stroke:#3a4429; stroke-width:2.5;}
+  .progress-ring{
+    fill:none;
+    stroke:var(--amber);
+    stroke-width:3;
+    stroke-linecap:round;
+    transform:rotate(-90deg);
+    transform-origin:50% 50%;
+    filter:drop-shadow(0 0 6px rgba(255,176,0,0.55));
+    transition:stroke-dashoffset .08s linear;
+  }
+
+  .readout{
+    position:relative;
+    text-align:center;
+    z-index:2;
+  }
+  .time{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:2.55rem;
+    letter-spacing:0.01em;
+    color:var(--amber);
+    text-shadow:0 0 18px rgba(255,176,0,0.35);
+    line-height:1;
+  }
+  .time .cs{ font-size:1.4rem; color:var(--amber-dim); }
+  .state-label{
+    margin-top:10px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:0.3em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+  }
+  .state-label.running{color:var(--teal);}
+  .state-label.stopped{color:var(--red);}
+
+  /* Controls */
+  .controls{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:10px;
+    margin-bottom:20px;
+  }
+  .ctrl{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    padding:13px 4px;
+    border-radius:12px;
+    border:1px solid #2A3120;
+    background:var(--panel-2);
+    color:var(--ink);
+    cursor:pointer;
+    transition:transform .08s ease, border-color .15s, background .15s;
+  }
+  .ctrl:active{transform:scale(0.96);}
+  .ctrl:hover{border-color:#465127;}
+  .ctrl.start{color:var(--teal); border-color:rgba(45,212,191,0.3);}
+  .ctrl.stop{color:var(--red); border-color:rgba(255,92,92,0.3);}
+  .ctrl.lap{color:var(--amber); border-color:rgba(255,176,0,0.3);}
+  .ctrl:disabled{opacity:0.35; cursor:not-allowed;}
+
+  /* Voice heard toast */
+  .heard{
+    text-align:center;
+    min-height:18px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin-bottom:14px;
+    transition:opacity .3s;
+  }
+  .heard b{color:var(--amber);}
+
+  /* Lap log */
+  .log-head{
+    display:flex;
+    justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    padding:0 4px 8px;
+    border-bottom:1px solid #232819;
+  }
+  .log{
+    max-height:180px;
+    overflow-y:auto;
+    margin-top:2px;
+  }
+  .log::-webkit-scrollbar{width:6px;}
+  .log::-webkit-scrollbar-thumb{background:#2A3120; border-radius:6px;}
+  .lap-row{
+    display:grid;
+    grid-template-columns:34px 1fr 1fr;
+    gap:8px;
+    align-items:center;
+    padding:9px 4px;
+    border-bottom:1px solid #1c2115;
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    animation:slide-in .25s ease;
+  }
+  @keyframes slide-in{from{opacity:0; transform:translateY(-6px);} to{opacity:1; transform:translateY(0);}}
+  .lap-row .idx{color:var(--ink-dim); font-size:11.5px;}
+  .lap-row .split{color:var(--teal); text-align:right;}
+  .lap-row .total{color:var(--ink); text-align:right;}
+  .lap-row.best .split{color:var(--amber);}
+  .empty-log{
+    text-align:center;
+    padding:22px 8px 6px;
+    color:var(--ink-dim);
+    font-size:12px;
+  }
+
+  .tabs{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+    background:var(--panel-2);
+    border:1px solid #2A3120;
+    border-radius:12px;
+    padding:4px;
+    margin-bottom:20px;
+  }
+  .tab{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:12px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    padding:9px 4px;
+    border-radius:9px;
+    border:none;
+    background:transparent;
+    color:var(--ink-dim);
+    cursor:pointer;
+    transition:background .15s, color .15s;
+  }
+  .tab.active{
+    background:#232919;
+    color:var(--amber);
+    box-shadow:inset 0 0 0 1px rgba(255,176,0,0.25);
+  }
+  .tab .tab-badge{
+    display:inline-block;
+    margin-left:5px;
+    font-size:9.5px;
+    color:var(--teal);
+  }
+
+  .panel{ display:block; }
+  .panel[hidden]{ display:none; }
+
+  /* Analysis panel */
+  .analysis-empty{
+    text-align:center;
+    padding:50px 12px;
+    color:var(--ink-dim);
+    font-size:13px;
+    line-height:1.7;
+  }
+  .analysis-note{
+    text-align:center;
+    font-size:11px;
+    color:var(--teal);
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    margin:-6px 0 16px;
+  }
+  .stats-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:20px;
+  }
+  .stat-card{
+    background:var(--panel-2);
+    border:1px solid #232819;
+    border-radius:12px;
+    padding:12px 14px;
+  }
+  .stat-label{
+    font-size:9.5px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin-bottom:6px;
+  }
+  .stat-value{
+    font-family:'JetBrains Mono',monospace;
+    font-size:1.15rem;
+    font-weight:700;
+    color:var(--amber);
+  }
+  .stat-value.teal{color:var(--teal);}
+  .stat-value.red{color:var(--red);}
+  .stat-sub{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    color:var(--ink-dim);
+    margin-top:2px;
+  }
+
+  .chart-wrap{
+    background:var(--panel-2);
+    border:1px solid #232819;
+    border-radius:12px;
+    padding:14px 10px 10px;
+    margin-bottom:18px;
+  }
+  .chart-title{
+    font-size:10px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin:0 4px 8px;
+  }
+  .chart-bar{ transition:height .2s ease, y .2s ease; }
+  .chart-avg-line{ stroke:var(--teal); stroke-width:1.5; stroke-dasharray:4 3; }
+  .chart-label{ font-family:'JetBrains Mono',monospace; font-size:8.5px; fill:var(--ink-dim); }
+  .chart-val{ font-family:'JetBrains Mono',monospace; font-size:8px; fill:var(--ink); }
+
+  .report-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:6px;
+  }
+  .report-btn{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:12px;
+    letter-spacing:0.04em;
+    padding:12px 4px;
+    border-radius:12px;
+    border:1px solid rgba(45,212,191,0.3);
+    background:var(--panel-2);
+    color:var(--teal);
+    cursor:pointer;
+    transition:transform .08s ease, border-color .15s;
+  }
+  .report-btn:active{ transform:scale(0.96); }
+  .report-btn:hover{ border-color:rgba(45,212,191,0.55); }
+
+  .hint{
+    margin-top:18px;
+    text-align:center;
+    font-size:11px;
+    color:var(--ink-dim);
+    line-height:1.6;
+  }
+  .hint code{
+    background:var(--panel-2);
+    padding:1px 6px;
+    border-radius:5px;
+    color:var(--amber);
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .lap-row, .mic-dot{animation:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="unit">
+  <div class="brand-row">
+    <div class="brand"><b>CHRONO</b>VOX</div>
+    <div class="mic-toggle" id="micToggle" role="button" tabindex="0" aria-pressed="false">
+      <span class="mic-dot"></span>
+      <span id="micLabel">Voice off</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tabTimer" data-tab="timer">Timer</button>
+    <button class="tab" id="tabAnalysis" data-tab="analysis">Analysis<span class="tab-badge" id="tabBadge"></span></button>
+  </div>
+
+  <div class="panel" id="panelTimer">
+    <div class="dial-wrap">
+      <svg class="bezel" viewBox="0 0 200 200">
+        <g id="ticks"></g>
+        <circle class="progress-ring" id="progressRing" cx="100" cy="100" r="90" stroke-dasharray="565.5" stroke-dashoffset="565.5"/>
+      </svg>
+      <div class="readout">
+        <div class="time" id="timeDisplay">00:00<span class="cs">.00</span></div>
+        <div class="state-label stopped" id="stateLabel">Ready</div>
+      </div>
+    </div>
+
+    <div class="heard" id="heard">&nbsp;</div>
+
+    <div class="controls">
+      <button class="ctrl start" id="btnStart">Start</button>
+      <button class="ctrl lap" id="btnLap" disabled>Lap</button>
+      <button class="ctrl stop" id="btnStop" disabled>Stop</button>
+      <button class="ctrl" id="btnReset">Reset</button>
+    </div>
+
+    <div class="log-head">
+      <span>Lap log</span>
+      <span>split · total</span>
+    </div>
+    <div class="log" id="log">
+      <div class="empty-log" id="emptyLog">No laps recorded yet</div>
+    </div>
+
+    <div class="hint">
+      Say <code>start</code>, <code>go</code>, <code>stop</code>, or <code>reset</code> — or use the buttons above.
+    </div>
+  </div>
+
+  <div class="panel" id="panelAnalysis" hidden>
+    <div id="analysisEmpty" class="analysis-empty">No laps to analyze yet.<br>Record at least one lap, then stop the clock.</div>
+
+    <div id="analysisContent" hidden>
+      <div class="analysis-note" id="analysisNote" hidden>Clock still running — showing live data</div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total time</div>
+          <div class="stat-value" id="statTotal">00:00.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Laps recorded</div>
+          <div class="stat-value" id="statCount">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Average lap</div>
+          <div class="stat-value teal" id="statAvg">00:00.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Consistency (σ)</div>
+          <div class="stat-value" id="statStdDev">±00:00.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Fastest lap</div>
+          <div class="stat-value teal" id="statBest">—</div>
+          <div class="stat-sub" id="statBestIdx"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Slowest lap</div>
+          <div class="stat-value red" id="statWorst">—</div>
+          <div class="stat-sub" id="statWorstIdx"></div>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-title">Lap splits (dashed line = average)</div>
+        <svg id="chartSvg" viewBox="0 0 300 140" style="width:100%; height:auto; display:block;"></svg>
+      </div>
+
+      <div class="log-head">
+        <span>Full breakdown</span>
+        <span>split · total</span>
+      </div>
+      <div class="log" id="analysisLog"></div>
+
+      <div class="report-actions" style="margin-top:16px;">
+        <button class="report-btn" id="btnCopyReport">Copy report</button>
+        <button class="report-btn" id="btnDownloadReport">Download .txt</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---------- Timer core ----------
+  let running = false;
+  let startTime = 0;
+  let elapsedBeforePause = 0;
+  let rafId = null;
+  let laps = []; // {totalMs, splitMs}
+
+  const timeDisplay = document.getElementById('timeDisplay');
+  const stateLabel = document.getElementById('stateLabel');
+  const btnStart = document.getElementById('btnStart');
+  const btnLap = document.getElementById('btnLap');
+  const btnStop = document.getElementById('btnStop');
+  const btnReset = document.getElementById('btnReset');
+  const logEl = document.getElementById('log');
+  const emptyLog = document.getElementById('emptyLog');
+  const progressRing = document.getElementById('progressRing');
+  const heard = document.getElementById('heard');
+  const CIRC = 2 * Math.PI * 90;
+
+  function formatTime(ms){
+    const totalCs = Math.floor(ms / 10);
+    const cs = totalCs % 100;
+    const totalSec = Math.floor(totalCs / 100);
+    const sec = totalSec % 60;
+    const min = Math.floor(totalSec / 60);
+    const pad = (n, l=2) => String(n).padStart(l, '0');
+    return { main: `${pad(min)}:${pad(sec)}`, cs: pad(cs) };
+  }
+
+  function currentElapsed(){
+    return running ? (performance.now() - startTime) : elapsedBeforePause;
+  }
+
+  function render(){
+    const ms = currentElapsed();
+    const { main, cs } = formatTime(ms);
+    timeDisplay.innerHTML = `${main}<span class="cs">.${cs}</span>`;
+    const secFraction = (ms % 60000) / 60000;
+    progressRing.style.strokeDashoffset = CIRC - secFraction * CIRC;
+  }
+
+  function tick(){
+    render();
+    if (running) rafId = requestAnimationFrame(tick);
+  }
+
+  function setState(label, cls){
+    stateLabel.textContent = label;
+    stateLabel.className = 'state-label ' + (cls || '');
+  }
+
+  function doStart(){
+    if (running) { flashHeard('Already running'); return; }
+    running = true;
+    startTime = performance.now() - elapsedBeforePause;
+    btnStart.disabled = true;
+    btnLap.disabled = false;
+    btnStop.disabled = false;
+    setState('Running', 'running');
+    tick();
+  }
+
+  function doStop(){
+    if (!running) { flashHeard('Already stopped'); return; }
+    running = false;
+    elapsedBeforePause = performance.now() - startTime;
+    cancelAnimationFrame(rafId);
+    btnStart.disabled = false;
+    btnLap.disabled = true;
+    btnStop.disabled = true;
+    setState('Stopped', 'stopped');
+    render();
+    renderAnalysis();
+  }
+
+  function doLap(){
+    if (!running) { flashHeard('Start the clock first'); return; }
+    const total = currentElapsed();
+    const prevTotal = laps.length ? laps[laps.length - 1].totalMs : 0;
+    const split = total - prevTotal;
+    laps.push({ totalMs: total, splitMs: split });
+    renderLaps();
+  }
+
+  function doReset(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    elapsedBeforePause = 0;
+    laps = [];
+    btnStart.disabled = false;
+    btnLap.disabled = true;
+    btnStop.disabled = true;
+    setState('Ready', '');
+    progressRing.style.strokeDashoffset = CIRC;
+    renderLaps();
+    render();
+    if (typeof switchTab === 'function') switchTab('timer');
+  }
+
+  function renderLaps(){
+    updateTabBadge();
+    logEl.innerHTML = '';
+    if (!laps.length){
+      logEl.appendChild(emptyLog);
+      renderAnalysis();
+      return;
+    }
+    let bestIdx = 0, bestSplit = Infinity;
+    laps.forEach((l, i) => { if (l.splitMs < bestSplit){ bestSplit = l.splitMs; bestIdx = i; } });
+
+    laps.forEach((l, i) => {
+      const row = document.createElement('div');
+      row.className = 'lap-row' + (i === bestIdx && laps.length > 1 ? ' best' : '');
+      const t = formatTime(l.totalMs);
+      const s = formatTime(l.splitMs);
+      row.innerHTML = `
+        <span class="idx">${String(i+1).padStart(2,'0')}</span>
+        <span class="split">+${s.main}.${s.cs}</span>
+        <span class="total">${t.main}.${t.cs}</span>
+      `;
+      logEl.insertBefore(row, logEl.firstChild);
+    });
+    renderAnalysis();
+  }
+
+  function drawTicks(){
+    const g = document.getElementById('ticks');
+    for (let i = 0; i < 60; i++){
+      const angle = (i / 60) * 2 * Math.PI - Math.PI/2;
+      const major = i % 5 === 0;
+      const rOuter = 90;
+      const rInner = major ? 80 : 85;
+      const x1 = 100 + rOuter * Math.cos(angle);
+      const y1 = 100 + rOuter * Math.sin(angle);
+      const x2 = 100 + rInner * Math.cos(angle);
+      const y2 = 100 + rInner * Math.sin(angle);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('class', 'tick' + (major ? ' major' : ''));
+      g.appendChild(line);
+    }
+  }
+  drawTicks();
+
+  btnStart.addEventListener('click', doStart);
+  btnStop.addEventListener('click', doStop);
+  btnLap.addEventListener('click', doLap);
+  btnReset.addEventListener('click', doReset);
+
+  let heardTimeout = null;
+  function flashHeard(text){
+    heard.innerHTML = text;
+    clearTimeout(heardTimeout);
+    heard.style.opacity = '1';
+    heardTimeout = setTimeout(() => { heard.style.opacity = '0.4'; }, 1800);
+  }
+
+  // ---------- Voice control ----------
+  const micToggle = document.getElementById('micToggle');
+  const micLabel = document.getElementById('micLabel');
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let listening = false;
+  let manuallyStopped = true;
+
+  function commandFromTranscript(text){
+    text = text.toLowerCase();
+    if (/\breset\b/.test(text)) return 'reset';
+    if (/\blap\b|\bgo\b/.test(text)) return 'lap';
+    if (/\bstop\b|\bpause\b/.test(text)) return 'stop';
+    if (/\bstart\b|\bbegin\b/.test(text)) return 'start';
+    return null;
+  }
+
+  function handleCommand(cmd){
+    if (cmd === 'start') { doStart(); flashHeard(`Heard: <b>start</b>`); }
+    else if (cmd === 'lap') { doLap(); flashHeard(`Heard: <b>lap</b>`); }
+    else if (cmd === 'stop') { doStop(); flashHeard(`Heard: <b>stop</b>`); }
+    else if (cmd === 'reset') { doReset(); flashHeard(`Heard: <b>reset</b>`); }
+  }
+
+  function setupRecognition(){
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      const last = event.results[event.results.length - 1];
+      const transcript = last[0].transcript.trim();
+      const cmd = commandFromTranscript(transcript);
+      if (cmd) handleCommand(cmd);
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed'){
+        flashHeard('Microphone access denied');
+        stopListening();
+      }
+    };
+
+    recognition.onend = () => {
+      if (listening && !manuallyStopped){
+        try { recognition.start(); } catch(e){}
+      }
+    };
+  }
+
+  function startListening(){
+    if (!SpeechRecognition){
+      flashHeard('Voice recognition not supported in this browser');
+      return;
+    }
+    if (!recognition) setupRecognition();
+    manuallyStopped = false;
+    try { recognition.start(); } catch(e){}
+    listening = true;
+    micToggle.classList.add('listening');
+    micToggle.setAttribute('aria-pressed', 'true');
+    micLabel.textContent = 'Listening';
+  }
+
+  function stopListening(){
+    manuallyStopped = true;
+    listening = false;
+    if (recognition) { try { recognition.stop(); } catch(e){} }
+    micToggle.classList.remove('listening');
+    micToggle.setAttribute('aria-pressed', 'false');
+    micLabel.textContent = 'Voice off';
+  }
+
+  micToggle.addEventListener('click', () => {
+    listening ? stopListening() : startListening();
+  });
+  micToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); micToggle.click(); }
+  });
+
+  if (!SpeechRecognition){
+    micLabel.textContent = 'Voice unsupported';
+    micToggle.style.opacity = '0.5';
+    micToggle.style.cursor = 'not-allowed';
+  }
+
+  // ---------- Tabs ----------
+  const tabTimer = document.getElementById('tabTimer');
+  const tabAnalysis = document.getElementById('tabAnalysis');
+  const panelTimer = document.getElementById('panelTimer');
+  const panelAnalysis = document.getElementById('panelAnalysis');
+  const tabBadge = document.getElementById('tabBadge');
+
+  function switchTab(name){
+    const toAnalysis = name === 'analysis';
+    tabTimer.classList.toggle('active', !toAnalysis);
+    tabAnalysis.classList.toggle('active', toAnalysis);
+    panelTimer.hidden = toAnalysis;
+    panelAnalysis.hidden = !toAnalysis;
+    if (toAnalysis) renderAnalysis();
+  }
+  tabTimer.addEventListener('click', () => switchTab('timer'));
+  tabAnalysis.addEventListener('click', () => switchTab('analysis'));
+
+  function updateTabBadge(){
+    tabBadge.textContent = laps.length ? laps.length : '';
+  }
+
+  // ---------- Analysis ----------
+  const analysisEmpty = document.getElementById('analysisEmpty');
+  const analysisContent = document.getElementById('analysisContent');
+  const analysisNote = document.getElementById('analysisNote');
+  const analysisLog = document.getElementById('analysisLog');
+  const chartSvg = document.getElementById('chartSvg');
+
+  function fmtFull(ms){
+    const t = formatTime(ms);
+    return `${t.main}.${t.cs}`;
+  }
+
+  function computeStats(){
+    const splits = laps.map(l => l.splitMs);
+    const n = splits.length;
+    const total = laps.length ? laps[laps.length-1].totalMs : 0;
+    const avg = splits.reduce((a,b) => a+b, 0) / n;
+    const variance = splits.reduce((a,b) => a + Math.pow(b-avg,2), 0) / n;
+    const stdDev = Math.sqrt(variance);
+    let bestIdx = 0, worstIdx = 0;
+    splits.forEach((s,i) => {
+      if (s < splits[bestIdx]) bestIdx = i;
+      if (s > splits[worstIdx]) worstIdx = i;
+    });
+    return { splits, n, total, avg, stdDev, bestIdx, worstIdx };
+  }
+
+  function renderChart(stats){
+    const W = 300, H = 140, padL = 4, padR = 4, padT = 8, padB = 18;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const n = stats.n;
+    const maxSplit = Math.max(...stats.splits, 1);
+    const barGap = 4;
+    const barW = Math.max(6, (plotW - barGap*(n-1)) / n);
+
+    let svg = '';
+    stats.splits.forEach((s, i) => {
+      const h = (s / maxSplit) * plotH;
+      const x = padL + i * (barW + barGap);
+      const y = padT + (plotH - h);
+      const isBest = i === stats.bestIdx;
+      const isWorst = i === stats.worstIdx && stats.n > 1;
+      const color = isBest ? 'var(--amber)' : isWorst ? 'var(--red)' : 'var(--teal)';
+      svg += `<rect class="chart-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${color}" opacity="0.85"/>`;
+      svg += `<text class="chart-label" x="${(x+barW/2).toFixed(1)}" y="${H-6}" text-anchor="middle">${i+1}</text>`;
+    });
+    const avgY = padT + plotH - (stats.avg / maxSplit) * plotH;
+    svg += `<line class="chart-avg-line" x1="${padL}" y1="${avgY.toFixed(1)}" x2="${W-padR}" y2="${avgY.toFixed(1)}"/>`;
+    chartSvg.innerHTML = svg;
+  }
+
+  function renderAnalysis(){
+    updateTabBadge();
+    if (!laps.length){
+      analysisEmpty.hidden = false;
+      analysisContent.hidden = true;
+      return;
+    }
+    analysisEmpty.hidden = true;
+    analysisContent.hidden = false;
+    analysisNote.hidden = !running;
+
+    const stats = computeStats();
+    document.getElementById('statTotal').textContent = fmtFull(stats.total);
+    document.getElementById('statCount').textContent = stats.n;
+    document.getElementById('statAvg').textContent = fmtFull(stats.avg);
+    document.getElementById('statStdDev').textContent = '±' + fmtFull(stats.stdDev);
+    document.getElementById('statBest').textContent = fmtFull(stats.splits[stats.bestIdx]);
+    document.getElementById('statBestIdx').textContent = `Lap ${stats.bestIdx+1}`;
+    document.getElementById('statWorst').textContent = fmtFull(stats.splits[stats.worstIdx]);
+    document.getElementById('statWorstIdx').textContent = `Lap ${stats.worstIdx+1}`;
+
+    renderChart(stats);
+
+    analysisLog.innerHTML = '';
+    laps.forEach((l, i) => {
+      const row = document.createElement('div');
+      row.className = 'lap-row' + (i === stats.bestIdx && stats.n > 1 ? ' best' : '');
+      row.innerHTML = `
+        <span class="idx">${String(i+1).padStart(2,'0')}</span>
+        <span class="split">+${fmtFull(l.splitMs)}</span>
+        <span class="total">${fmtFull(l.totalMs)}</span>
+      `;
+      analysisLog.insertBefore(row, analysisLog.firstChild);
+    });
+  }
+
+  function buildReportText(){
+    const stats = computeStats();
+    const now = new Date();
+    const dateStr = now.toLocaleString();
+    let lines = [];
+    lines.push('CHRONOVOX SESSION REPORT');
+    lines.push('Generated: ' + dateStr);
+    lines.push('Status: ' + (running ? 'Running (live snapshot)' : 'Stopped'));
+    lines.push('');
+    lines.push('Total time      : ' + fmtFull(stats.total));
+    lines.push('Laps recorded   : ' + stats.n);
+    lines.push('Average lap     : ' + fmtFull(stats.avg));
+    lines.push('Consistency (\u03c3) : \u00b1' + fmtFull(stats.stdDev));
+    lines.push('Fastest lap     : Lap ' + (stats.bestIdx+1) + ' \u2014 ' + fmtFull(stats.splits[stats.bestIdx]));
+    lines.push('Slowest lap     : Lap ' + (stats.worstIdx+1) + ' \u2014 ' + fmtFull(stats.splits[stats.worstIdx]));
+    lines.push('');
+    lines.push('Lap  Split        Total');
+    laps.forEach((l, i) => {
+      const idx = String(i+1).padStart(2,'0');
+      lines.push(`${idx}   ${fmtFull(l.splitMs).padEnd(12)} ${fmtFull(l.totalMs)}`);
+    });
+    return lines.join('\n');
+  }
+
+  document.getElementById('btnCopyReport').addEventListener('click', async () => {
+    const text = buildReportText();
+    try {
+      await navigator.clipboard.writeText(text);
+      flashHeard('Report copied to clipboard');
+    } catch(e){
+      flashHeard('Copy failed \u2014 try download instead');
+    }
+  });
+
+  document.getElementById('btnDownloadReport').addEventListener('click', () => {
+    const text = buildReportText();
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+    a.href = url;
+    a.download = `chronovox-report-${stamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  render();
+})();
+</script>
+
+</body>
+</html>
