@@ -436,7 +436,7 @@
     </div>
 
     <div class="hint">
-      Say <code>start</code>, <code>take</code>, <code>stop</code>, or <code>reset</code> — or use the buttons above.
+      Say <code>start</code>, <code>mark</code>, <code>stop</code>, or <code>reset</code> — or use the buttons above.
     </div>
   </div>
 
@@ -665,7 +665,7 @@
   function commandFromTranscript(text){
     text = text.toLowerCase();
     if (/\breset\b/.test(text)) return 'reset';
-    if (/\blap\b|\btake\b/.test(text)) return 'lap';
+    if (/\blap\b|\bmark\b/.test(text)) return 'lap';
     if (/\bstop\b|\bpause\b/.test(text)) return 'stop';
     if (/\bstart\b|\bbegin\b/.test(text)) return 'start';
     return null;
@@ -688,7 +688,11 @@
       const last = event.results[event.results.length - 1];
       const transcript = last[0].transcript.trim();
       const cmd = commandFromTranscript(transcript);
-      if (cmd) handleCommand(cmd);
+      if (cmd) {
+        handleCommand(cmd);
+      } else if (transcript) {
+        flashHeard(`No match: "${transcript}"`);
+      }
     };
 
     recognition.onerror = (event) => {
